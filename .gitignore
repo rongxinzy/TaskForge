@@ -1,0 +1,15 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+build/
+target/
+.turbo/
+.next/
+.cache/
+coverage/
+*.log
+*.sqlite
+*.sqlite3
