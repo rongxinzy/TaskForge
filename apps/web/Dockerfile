@@ -20,6 +20,7 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 
+RUN pnpm --filter @taskforge/contracts build
 RUN pnpm --filter @taskforge/web build
 
 FROM base AS runner
