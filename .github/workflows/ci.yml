@@ -40,13 +40,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Validate Prisma schemas
+        run: pnpm db:validate
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Build workspace packages
+        run: pnpm turbo run build --filter=!@taskforge/web
+
       - name: Lint / typecheck
         run: |
           pnpm lint
           pnpm typecheck
-
-      - name: Validate Prisma schemas
-        run: pnpm db:validate
 
       - name: SQLite smoke test
         env:
