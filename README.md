@@ -98,6 +98,18 @@ pnpm dev
 
 ## Runner quick start
 
+GitHub Actions automatically builds release binaries for Linux, macOS and Windows. You can download the latest binary from the Actions artifacts or from a GitHub Release page.
+
+```bash
+# Linux example
+chmod +x taskforge-runner-x86_64-unknown-linux-gnu
+./taskforge-runner-x86_64-unknown-linux-gnu login --token dev-token
+./taskforge-runner-x86_64-unknown-linux-gnu register --name my-runner --project-id <PROJECT_ID>
+./taskforge-runner-x86_64-unknown-linux-gnu start
+```
+
+Or run from source:
+
 ```bash
 cd crates/runner
 cargo run --bin taskforge-runner -- login --token dev-token
