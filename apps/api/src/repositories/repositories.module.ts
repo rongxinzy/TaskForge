@@ -6,8 +6,7 @@ import { GitHubRepositoryProvider, RepositoryProvider } from "./provider.port";
 import { GitLabRepositoryProvider } from "./gitlab.provider";
 import { RepositoriesService } from "./repositories.service";
 import { RepositoriesController } from "./repositories.controller";
-
-export const REPOSITORY_PROVIDERS = "REPOSITORY_PROVIDERS";
+import { REPOSITORY_PROVIDERS } from "./repositories.constants";
 
 export type RepositoryProviderMap = Record<string, RepositoryProvider>;
 

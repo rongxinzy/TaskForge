@@ -2,10 +2,8 @@ import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { RepositoryProviderInput } from "@taskforge/contracts";
 import { PrismaService } from "../common/prisma.service";
 import { AuditService } from "../audit/audit.service";
-import {
-  REPOSITORY_PROVIDERS,
-  RepositoryProviderMap,
-} from "./repositories.module";
+import { REPOSITORY_PROVIDERS } from "./repositories.constants";
+import type { RepositoryProviderMap } from "./repositories.module";
 
 @Injectable()
 export class RepositoriesService {
