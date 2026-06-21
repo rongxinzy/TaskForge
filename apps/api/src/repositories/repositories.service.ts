@@ -2,15 +2,18 @@ import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { RepositoryProviderInput } from "@taskforge/contracts";
 import { PrismaService } from "../common/prisma.service";
 import { AuditService } from "../audit/audit.service";
-import { GitHubRepositoryProvider, RepositoryProvider } from "./provider.port";
+import {
+  REPOSITORY_PROVIDERS,
+  RepositoryProviderMap,
+} from "./repositories.module";
 
 @Injectable()
 export class RepositoriesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
-    @Inject("REPOSITORY_PROVIDER")
-    private readonly provider: RepositoryProvider,
+    @Inject(REPOSITORY_PROVIDERS)
+    private readonly providers: RepositoryProviderMap,
   ) {}
 
   async create(
@@ -25,7 +28,14 @@ export class RepositoriesService {
       throw new NotFoundException("Project not found");
     }
 
-    const metadata = await this.provider.fetchMetadata(input);
+    const provider = this.providers[input.provider];
+    if (!provider) {
+      throw new NotFoundException(
+        `Repository provider "${input.provider}" is not configured`,
+      );
+    }
+
+    const metadata = await provider.fetchMetadata(input);
     const repository = await this.prisma.repository.create({
       data: {
         projectId,
