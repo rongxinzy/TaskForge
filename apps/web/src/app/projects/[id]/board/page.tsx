@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
-import { ProjectBoard, WorkItem, WorkItemStatus } from "@/lib/types";
+import {
+  ProjectBoard,
+  Repository,
+  WorkItem,
+  WorkItemStatus,
+} from "@/lib/types";
 import { WorkItemCard } from "@/components/work-item-card";
 import { CreateWorkItemForm } from "@/components/create-work-item-form";
 import { RepositoryList } from "@/components/repository-list";
@@ -24,10 +29,16 @@ export default async function BoardPage({
   params: { id: string };
 }) {
   let board: ProjectBoard | null = null;
+  let repositories: Repository[] = [];
   let error: string | null = null;
 
   try {
-    board = await apiFetch<ProjectBoard>(`/api/projects/${params.id}/board`);
+    [board, repositories] = await Promise.all([
+      apiFetch<ProjectBoard>(`/api/projects/${params.id}/board`),
+      apiFetch<Repository[]>(`/api/projects/${params.id}/repositories`).catch(
+        () => [],
+      ),
+    ]);
   } catch (e) {
     error = e instanceof Error ? e.message : "Failed to load board";
   }
@@ -70,7 +81,7 @@ export default async function BoardPage({
             </p>
           ) : null}
           <div className="mt-2">
-            <RepositoryList projectId={params.id} />
+            <RepositoryList projectId={params.id} initialRepos={repositories} />
           </div>
         </div>
         <Link

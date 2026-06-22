@@ -11,16 +11,23 @@ function providerLabel(repo: Repository) {
   return `${repo.provider}/${name}`;
 }
 
-export function RepositoryList({ projectId }: { projectId: string }) {
-  const [repos, setRepos] = useState<Repository[]>([]);
-  const [loading, setLoading] = useState(true);
+export function RepositoryList({
+  projectId,
+  initialRepos,
+}: {
+  projectId: string;
+  initialRepos?: Repository[];
+}) {
+  const [repos, setRepos] = useState<Repository[]>(initialRepos ?? []);
+  const [loading, setLoading] = useState(!initialRepos);
 
   useEffect(() => {
+    if (initialRepos) return;
     apiFetch<Repository[]>(`/api/projects/${projectId}/repositories`)
       .then(setRepos)
       .catch(() => setRepos([]))
       .finally(() => setLoading(false));
-  }, [projectId]);
+  }, [projectId, initialRepos]);
 
   if (loading) {
     return <span className="text-xs text-gray-400">loading repos…</span>;
