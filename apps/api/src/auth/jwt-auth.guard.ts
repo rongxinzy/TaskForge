@@ -16,6 +16,11 @@ export class JwtAuthGuard extends AuthGuard("jwt") implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
 
+    // Auth endpoints are public.
+    if (request.url?.startsWith("/api/auth/")) {
+      return true;
+    }
+
     // Try JWT first (cookie or Authorization header).
     const jwtResult = await this.superCanActivate(context).catch(() => false);
     if (jwtResult && request.user) {
