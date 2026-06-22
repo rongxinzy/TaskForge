@@ -11,6 +11,14 @@ interface User {
   name: string;
 }
 
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 export function AuthStatus() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -31,7 +39,9 @@ export function AuthStatus() {
   }
 
   if (loading) {
-    return <span className="text-sm text-gray-500">...</span>;
+    return (
+      <div className="h-8 w-8 animate-pulse rounded-full bg-gray-200" />
+    );
   }
 
   if (!user) {
@@ -55,7 +65,12 @@ export function AuthStatus() {
 
   return (
     <div className="flex items-center gap-3">
-      <span className="text-sm text-gray-700">{user.name}</span>
+      <div
+        className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-600 text-sm font-semibold text-white"
+        title={user.name}
+      >
+        {initials(user.name)}
+      </div>
       <button
         onClick={logout}
         className="text-sm font-medium text-gray-500 hover:text-red-600"
