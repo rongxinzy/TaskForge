@@ -20,6 +20,7 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 
+ENV TASKFORGE_API_URL=http://api:3001
 RUN pnpm --filter @taskforge/contracts build
 RUN pnpm --filter @taskforge/web build
 
