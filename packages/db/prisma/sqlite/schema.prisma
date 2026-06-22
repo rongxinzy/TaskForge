@@ -63,7 +63,8 @@ model Project {
   roadmapItems   RoadmapItem[]
   findings       Finding[]
   workItems      WorkItem[]
-  runnerProfiles RunnerProfile[]
+  runnerProfiles RunnerProfile[] @relation(name: "ProjectRunnerProfiles")
+  runnerVisibilities RunnerProjectVisibility[]
   members        ProjectMember[]
 
   @@index([teamId])
@@ -204,20 +205,37 @@ model RunnerProfile {
   id               String    @id @default(cuid())
   ownerId          String
   projectId        String?
-  project          Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  project          Project?  @relation(name: "ProjectRunnerProfiles", fields: [projectId], references: [id], onDelete: SetNull)
   name             String
   status           String
+  scope            String    @default("personal")
   adapter          String?
   version          String?
   capabilities     Json?
   lastHeartbeatAt  DateTime?
 
-  bindings RepositoryBinding[]
-  sessions AgentSession[]
-  agents   RunnerAgent[]
+  bindings     RepositoryBinding[]
+  sessions     AgentSession[]
+  agents       RunnerAgent[]
+  visibilities RunnerProjectVisibility[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model RunnerProjectVisibility {
+  id        String        @id @default(cuid())
+  runnerId  String
+  runner    RunnerProfile @relation(fields: [runnerId], references: [id], onDelete: Cascade)
+  projectId String
+  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  visible   Boolean       @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([runnerId, projectId])
+  @@index([projectId])
 }
 
 model RunnerAgent {

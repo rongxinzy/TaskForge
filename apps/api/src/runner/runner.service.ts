@@ -8,6 +8,7 @@ import {
   AppendSessionEventInput,
   RunnerHeartbeatInput,
   RunnerRegisterInput,
+  SetRunnerVisibilityInput,
   UploadArtifactInput,
   type EventType,
   type RunnerStatus,
@@ -61,6 +62,7 @@ export class RunnerService {
         name: input.name,
         adapter: input.adapter ?? null,
         status: "online",
+        scope: input.scope ?? "personal",
         capabilities: (input.capabilities ?? {}) as any,
         lastHeartbeatAt: new Date(),
         agents: {
@@ -150,11 +152,60 @@ export class RunnerService {
 
   async listForProject(projectId: string, actorId: string) {
     await this.projects.requireAccess(actorId, projectId, "viewer");
-    return this.prisma.runnerProfile.findMany({
-      where: { projectId },
-      include: { agents: { orderBy: { name: "asc" } } },
+    const runners = await this.prisma.runnerProfile.findMany({
+      where: {
+        ownerId: actorId,
+        OR: [{ projectId: null }, { projectId }],
+      },
+      include: {
+        agents: { orderBy: { name: "asc" } },
+        visibilities: {
+          where: { projectId },
+          take: 1,
+        },
+      },
       orderBy: { lastHeartbeatAt: "desc" },
     });
+    return runners.filter((r) => {
+      const override = r.visibilities[0];
+      return override ? override.visible : true;
+    });
+  }
+
+  async setVisibility(
+    runnerId: string,
+    input: SetRunnerVisibilityInput,
+    actorId: string,
+  ) {
+    const runner = await this.prisma.runnerProfile.findUnique({
+      where: { id: runnerId },
+    });
+    if (!runner) {
+      throw new NotFoundException("Runner not found");
+    }
+    if (runner.ownerId !== actorId) {
+      throw new ForbiddenException("Runner does not belong to you");
+    }
+    await this.projects.requireAccess(actorId, input.projectId, "viewer");
+
+    if (input.visible) {
+      await this.prisma.runnerProjectVisibility.deleteMany({
+        where: { runnerId, projectId: input.projectId },
+      });
+    } else {
+      await this.prisma.runnerProjectVisibility.upsert({
+        where: {
+          runnerId_projectId: { runnerId, projectId: input.projectId },
+        },
+        create: {
+          runnerId,
+          projectId: input.projectId,
+          visible: false,
+        },
+        update: { visible: false },
+      });
+    }
+    return { ok: true };
   }
 
   async claim(runnerId: string) {

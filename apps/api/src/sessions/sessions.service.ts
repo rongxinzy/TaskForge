@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -44,20 +45,49 @@ export class SessionsService {
       "contributor",
     );
 
-    let resolvedRunner: { id: string; name: string; projectId: string | null; agents: { name: string }[] } | null = null;
+    let resolvedRunner: {
+      id: string;
+      name: string;
+      ownerId: string;
+      projectId: string | null;
+      agents: { name: string }[];
+      visibilities: { visible: boolean }[];
+    } | null = null;
     if (input.runnerId) {
       resolvedRunner = await this.prisma.runnerProfile.findUnique({
         where: { id: input.runnerId },
-        include: { agents: { select: { name: true } } },
+        include: {
+          agents: { select: { name: true } },
+          visibilities: {
+            where: { projectId: workItem.projectId },
+            take: 1,
+          },
+        },
       });
       if (!resolvedRunner) {
         throw new NotFoundException("Runner not found");
       }
-      if (resolvedRunner.projectId && resolvedRunner.projectId !== workItem.projectId) {
-        throw new BadRequestException("Runner does not belong to this project");
+      if (resolvedRunner.ownerId !== actorId) {
+        throw new ForbiddenException("Runner does not belong to you");
+      }
+      if (
+        resolvedRunner.projectId &&
+        resolvedRunner.projectId !== workItem.projectId
+      ) {
+        throw new BadRequestException(
+          "Runner is not available in this project",
+        );
+      }
+      const visibility = resolvedRunner.visibilities[0];
+      if (visibility && !visibility.visible) {
+        throw new BadRequestException(
+          "Runner is not visible in this project",
+        );
       }
       if (input.agentName) {
-        const found = resolvedRunner.agents.some((a) => a.name === input.agentName);
+        const found = resolvedRunner.agents.some(
+          (a) => a.name === input.agentName,
+        );
         if (!found) {
           throw new BadRequestException(
             `Agent ${input.agentName} is not available on this runner`,

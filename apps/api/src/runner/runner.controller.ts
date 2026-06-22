@@ -15,6 +15,7 @@ import {
   AppendSessionEventInput,
   RunnerHeartbeatInput,
   RunnerRegisterInput,
+  SetRunnerVisibilityInput,
   UploadArtifactInput,
 } from "@taskforge/contracts";
 import { ZodBody } from "../common/zod.pipe";
@@ -36,6 +37,15 @@ export class RunnerController {
   @Get("projects/:projectId")
   findRunners(@Param("projectId") projectId: string, @ReqUser() user: RequestUser) {
     return this.runner.listForProject(projectId, user.id);
+  }
+
+  @Post(":id/visibility")
+  setVisibility(
+    @Param("id") runnerId: string,
+    @ZodBody(SetRunnerVisibilityInput) input: SetRunnerVisibilityInput,
+    @ReqUser() user: RequestUser,
+  ) {
+    return this.runner.setVisibility(runnerId, input, user.id);
   }
 
   @Post("heartbeat")

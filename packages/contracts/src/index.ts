@@ -137,8 +137,15 @@ export const RunnerRegisterInput = z.object({
   adapter: z.string().max(100).optional(),
   capabilities: z.record(z.unknown()).optional(),
   agents: z.array(RunnerAgentInput).optional(),
+  scope: z.enum(["personal", "shared", "public"]).optional(),
 });
 export type RunnerRegisterInput = z.infer<typeof RunnerRegisterInput>;
+
+export const SetRunnerVisibilityInput = z.object({
+  projectId: z.string().cuid2(),
+  visible: z.boolean(),
+});
+export type SetRunnerVisibilityInput = z.infer<typeof SetRunnerVisibilityInput>;
 
 export const RunnerHeartbeatInput = z.object({
   status: RunnerStatus,
