@@ -1,5 +1,3 @@
-import { cookies } from "next/headers";
-
 export async function apiFetch<T = unknown>(
   path: string,
   options?: RequestInit,
@@ -13,6 +11,7 @@ export async function apiFetch<T = unknown>(
   const headers = new Headers(options?.headers);
   if (isServer) {
     try {
+      const { cookies } = await import("next/headers");
       const cookieStore = cookies();
       const cookie = cookieStore.toString();
       if (cookie) {
