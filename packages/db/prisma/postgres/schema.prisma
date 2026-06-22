@@ -92,6 +92,7 @@ model Repository {
   project      Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   provider     String
   url          String
+  accessToken  String?
   defaultBranch String?
   externalId   String?
   syncStatus   String  @default("pending")

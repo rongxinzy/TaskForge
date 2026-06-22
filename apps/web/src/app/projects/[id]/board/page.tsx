@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { ProjectBoard, WorkItem, WorkItemStatus } from "@/lib/types";
 import { WorkItemCard } from "@/components/work-item-card";
 import { CreateWorkItemForm } from "@/components/create-work-item-form";
+import { RepositoryList } from "@/components/repository-list";
 
 const columns: WorkItemStatus[] = [
   "backlog",
@@ -57,15 +59,26 @@ export default async function BoardPage({
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">
-          {board.project.name} Board
-        </h1>
-        {board.project.description ? (
-          <p className="mt-1 text-sm text-gray-600">
-            {board.project.description}
-          </p>
-        ) : null}
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {board.project.name} Board
+          </h1>
+          {board.project.description ? (
+            <p className="mt-1 text-sm text-gray-600">
+              {board.project.description}
+            </p>
+          ) : null}
+          <div className="mt-2">
+            <RepositoryList projectId={params.id} />
+          </div>
+        </div>
+        <Link
+          href={`/projects/${params.id}/settings`}
+          className="shrink-0 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Settings
+        </Link>
       </div>
 
       <CreateWorkItemForm projectId={params.id} />

@@ -6,6 +6,20 @@ import { ProjectsService } from "../projects/projects.service";
 import { REPOSITORY_PROVIDERS } from "./repositories.constants";
 import type { RepositoryProviderMap } from "./repositories.module";
 
+const safeRepositorySelect = {
+  id: true,
+  projectId: true,
+  provider: true,
+  url: true,
+  defaultBranch: true,
+  externalId: true,
+  syncStatus: true,
+  lastSyncAt: true,
+  syncError: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
 @Injectable()
 export class RepositoriesService {
   constructor(
@@ -42,9 +56,11 @@ export class RepositoriesService {
         projectId,
         provider: input.provider,
         url: input.url,
+        accessToken: input.accessToken ?? null,
         defaultBranch: input.defaultBranch ?? metadata.defaultBranch ?? null,
         externalId: input.externalId ?? metadata.externalId ?? null,
       },
+      select: safeRepositorySelect,
     });
 
     await this.audit.log(
@@ -55,5 +71,14 @@ export class RepositoriesService {
       { provider: input.provider, url: input.url },
     );
     return repository;
+  }
+
+  async listForProject(projectId: string, actorId: string) {
+    await this.projects.requireAccess(actorId, projectId, "viewer");
+    return this.prisma.repository.findMany({
+      where: { projectId },
+      select: safeRepositorySelect,
+      orderBy: { createdAt: "asc" },
+    });
   }
 }

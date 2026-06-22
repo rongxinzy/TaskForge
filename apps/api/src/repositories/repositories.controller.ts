@@ -1,4 +1,4 @@
-import { Controller, Param, Post } from "@nestjs/common";
+import { Controller, Get, Param, Post } from "@nestjs/common";
 import { RepositoryProviderInput } from "@taskforge/contracts";
 import { ZodBody } from "../common/zod.pipe";
 import { ReqUser, RequestUser } from "../auth/req-user.decorator";
@@ -15,5 +15,13 @@ export class RepositoriesController {
     @ReqUser() user: RequestUser,
   ) {
     return this.repositories.create(projectId, input, user.id);
+  }
+
+  @Get()
+  findMany(
+    @Param("projectId") projectId: string,
+    @ReqUser() user: RequestUser,
+  ) {
+    return this.repositories.listForProject(projectId, user.id);
   }
 }

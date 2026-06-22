@@ -66,6 +66,18 @@ export interface ProjectBoard {
   items: WorkItem[];
 }
 
+export interface Repository {
+  id: string;
+  projectId: string;
+  provider: string;
+  url: string;
+  defaultBranch?: string | null;
+  externalId?: string | null;
+  syncStatus: string;
+  lastSyncAt?: string | null;
+  syncError?: string | null;
+}
+
 export interface RunnerAgent {
   id: string;
   name: string;

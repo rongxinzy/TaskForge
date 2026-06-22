@@ -196,6 +196,7 @@ export type UploadArtifactInput = z.infer<typeof UploadArtifactInput>;
 export const RepositoryProviderInput = z.object({
   provider: z.enum(["github", "gitlab"]),
   url: z.string().url().max(1000),
+  accessToken: z.string().max(2000).optional(),
   externalId: z.string().max(200).optional(),
   defaultBranch: z.string().max(200).optional(),
 });
