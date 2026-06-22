@@ -13,8 +13,10 @@ import {
 import { Response } from "express";
 import {
   AppendSessionEventInput,
+  CreateRunnerRegistrationTokenInput,
   RunnerHeartbeatInput,
   RunnerRegisterInput,
+  RunnerUpInput,
   SetRunnerVisibilityInput,
   UploadArtifactInput,
 } from "@taskforge/contracts";
@@ -32,6 +34,19 @@ export class RunnerController {
     @ReqUser() user: RequestUser,
   ) {
     return this.runner.register(input, user.id);
+  }
+
+  @Post("tokens")
+  createToken(
+    @ZodBody(CreateRunnerRegistrationTokenInput) input: CreateRunnerRegistrationTokenInput,
+    @ReqUser() user: RequestUser,
+  ) {
+    return this.runner.createRegistrationToken(user.id, input.projectId);
+  }
+
+  @Post("up")
+  up(@ZodBody(RunnerUpInput) input: RunnerUpInput) {
+    return this.runner.up(input);
   }
 
   @Get("projects/:projectId")

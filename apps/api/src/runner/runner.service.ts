@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -8,6 +9,7 @@ import {
   AppendSessionEventInput,
   RunnerHeartbeatInput,
   RunnerRegisterInput,
+  RunnerUpInput,
   SetRunnerVisibilityInput,
   UploadArtifactInput,
   type EventType,
@@ -23,9 +25,11 @@ import {
   workItemStatusFromSessionResult,
 } from "@taskforge/domain";
 import { PrismaService } from "../common/prisma.service";
+import { RedisService } from "../common/redis.service";
 import { AuditService } from "../audit/audit.service";
 import { OutboxService } from "../outbox/outbox.service";
 import { ProjectsService } from "../projects/projects.service";
+import * as crypto from "crypto";
 
 const EVENT_TO_SESSION_STATUS: Partial<Record<EventType, SessionStatus>> = {
   "session.started": "running",
@@ -42,8 +46,12 @@ const EVENT_TO_SESSION_STATUS: Partial<Record<EventType, SessionStatus>> = {
 
 @Injectable()
 export class RunnerService {
+  private readonly REG_TOKEN_PREFIX = "runner:register:";
+  private readonly REG_TOKEN_TTL_SECONDS = 15 * 60;
+
   constructor(
     private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
     private readonly projects: ProjectsService,
@@ -53,18 +61,64 @@ export class RunnerService {
     if (input.projectId) {
       await this.projects.requireAccess(actorId, input.projectId, "contributor");
     }
+    return this.createRunnerProfile(input, actorId, input.projectId ?? null);
+  }
 
+  async createRegistrationToken(actorId: string, projectId: string) {
+    await this.projects.requireAccess(actorId, projectId, "maintainer");
+    const token = crypto.randomBytes(32).toString("hex");
+    await this.redis.getClient().setex(
+      `${this.REG_TOKEN_PREFIX}${token}`,
+      this.REG_TOKEN_TTL_SECONDS,
+      JSON.stringify({ userId: actorId, projectId }),
+    );
+    return { token };
+  }
+
+  async up(input: RunnerUpInput) {
+    const data = await this.redis
+      .getClient()
+      .get(`${this.REG_TOKEN_PREFIX}${input.token}`);
+    if (!data) {
+      throw new BadRequestException("Invalid or expired runner token");
+    }
+    const { userId, projectId } = JSON.parse(data) as {
+      userId: string;
+      projectId: string;
+    };
+
+    const result = await this.createRunnerProfile(
+      {
+        name: input.name,
+        adapter: input.adapter ?? "local",
+      },
+      userId,
+      projectId,
+    );
+
+    await this.redis
+      .getClient()
+      .del(`${this.REG_TOKEN_PREFIX}${input.token}`);
+
+    return result;
+  }
+
+  private async createRunnerProfile(
+    input: Pick<RunnerRegisterInput, "name" | "adapter" | "agents" | "scope">,
+    ownerId: string,
+    projectId: string | null,
+  ) {
     const token = crypto.randomUUID();
     const runner = await this.prisma.runnerProfile.create({
       data: {
-        ownerId: actorId,
-        projectId: input.projectId ?? null,
+        ownerId,
+        projectId,
         name: input.name,
         token,
         adapter: input.adapter ?? null,
         status: "online",
         scope: input.scope ?? "personal",
-        capabilities: (input.capabilities ?? {}) as any,
+        capabilities: ({} as any),
         lastHeartbeatAt: new Date(),
         agents: {
           create: (input.agents ?? []).map((a) => ({
@@ -77,7 +131,7 @@ export class RunnerService {
       },
       include: { agents: true },
     });
-    await this.audit.log("runner.registered", actorId, "runner", runner.id, {
+    await this.audit.log("runner.registered", ownerId, "runner", runner.id, {
       name: input.name,
     });
     return { runner_id: runner.id, token, agents: runner.agents };

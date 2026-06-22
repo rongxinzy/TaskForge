@@ -154,6 +154,20 @@ export const RunnerRegisterInput = z.object({
 });
 export type RunnerRegisterInput = z.infer<typeof RunnerRegisterInput>;
 
+export const CreateRunnerRegistrationTokenInput = z.object({
+  projectId: z.string().cuid2(),
+});
+export type CreateRunnerRegistrationTokenInput = z.infer<
+  typeof CreateRunnerRegistrationTokenInput
+>;
+
+export const RunnerUpInput = z.object({
+  token: z.string().min(1),
+  name: z.string().min(1).max(200),
+  adapter: z.string().max(100).optional(),
+});
+export type RunnerUpInput = z.infer<typeof RunnerUpInput>;
+
 export const SetRunnerVisibilityInput = z.object({
   projectId: z.string().cuid2(),
   visible: z.boolean(),

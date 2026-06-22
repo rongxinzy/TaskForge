@@ -16,8 +16,11 @@ export class JwtAuthGuard extends AuthGuard("jwt") implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
 
-    // Auth endpoints are public.
-    if (request.url?.startsWith("/api/auth/")) {
+    // Auth endpoints and runner bootstrap are public.
+    if (
+      request.url?.startsWith("/api/auth/") ||
+      request.url === "/api/runner/up"
+    ) {
       return true;
     }
 

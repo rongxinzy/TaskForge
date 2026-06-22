@@ -1,4 +1,5 @@
 pub mod acp_host;
+pub mod agent_discovery;
 pub mod agent_host;
 pub mod auth;
 pub mod binding;

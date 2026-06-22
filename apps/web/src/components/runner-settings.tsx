@@ -4,16 +4,14 @@ import { FormEvent, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { Runner } from "@/lib/types";
 
-interface RunnerRegistration {
-  runner_id: string;
+interface RunnerToken {
   token: string;
-  agents: { id: string; name: string; adapter?: string | null; status: string }[];
 }
 
 export function RunnerSettings({ projectId }: { projectId: string }) {
   const [runners, setRunners] = useState<Runner[]>([]);
   const [name, setName] = useState("");
-  const [registration, setRegistration] = useState<RunnerRegistration | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,25 +28,27 @@ export function RunnerSettings({ projectId }: { projectId: string }) {
     loadRunners();
   }, [projectId]);
 
-  async function register(e: FormEvent) {
+  async function createToken(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    setRegistration(null);
+    setToken(null);
     try {
-      const result = await apiFetch<RunnerRegistration>("/api/runner/register", {
+      const result = await apiFetch<RunnerToken>("/api/runner/tokens", {
         method: "POST",
-        body: JSON.stringify({ name, projectId, adapter: "local" }),
+        body: JSON.stringify({ projectId }),
       });
-      setRegistration(result);
-      setName("");
-      loadRunners();
+      setToken(result.token);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to register runner");
+      setError(err instanceof Error ? err.message : "Failed to create token");
     } finally {
       setLoading(false);
     }
   }
+
+  const command = token
+    ? `taskforge-runner up --token ${token}${name ? ` --name ${name}` : ""}`
+    : null;
 
   return (
     <div className="space-y-6">
@@ -57,7 +57,7 @@ export function RunnerSettings({ projectId }: { projectId: string }) {
       <div>
         <h3 className="mb-2 text-sm font-semibold text-gray-900">Registered runners</h3>
         {runners.length === 0 ? (
-          <p className="text-sm text-gray-500">No runners registered for this project yet.</p>
+          <p className="text-sm text-gray-500">No runners connected to this project yet.</p>
         ) : (
           <ul className="divide-y divide-gray-200 rounded-md border border-gray-200">
             {runners.map((runner) => (
@@ -98,16 +98,16 @@ export function RunnerSettings({ projectId }: { projectId: string }) {
         )}
       </div>
 
-      <form onSubmit={register} className="space-y-3">
-        <h3 className="text-sm font-semibold text-gray-900">Register a new local runner</h3>
+      <form onSubmit={createToken} className="space-y-3">
+        <h3 className="text-sm font-semibold text-gray-900">Connect a local runner</h3>
         <p className="text-xs text-gray-500">
-          Give your local runner a name. After registration you will get a token to use with the CLI.
+          Like Tailscale, generate a one-time token and paste the command in your terminal.
+          The runner will auto-register, discover agents in your PATH, and start.
         </p>
         <div className="flex gap-3">
           <input
             type="text"
-            required
-            placeholder="Runner name, e.g. macbook-pro"
+            placeholder="Runner name, e.g. macbook-pro (optional)"
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm"
@@ -117,23 +117,19 @@ export function RunnerSettings({ projectId }: { projectId: string }) {
             disabled={loading}
             className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
           >
-            {loading ? "Registering…" : "Register"}
+            {loading ? "Generating…" : "Generate command"}
           </button>
         </div>
       </form>
 
-      {registration ? (
+      {command ? (
         <div className="rounded-md border border-indigo-200 bg-indigo-50 p-4">
-          <p className="text-sm font-medium text-indigo-900">Runner registered</p>
+          <p className="text-sm font-medium text-indigo-900">Run this on your machine</p>
           <p className="mt-1 text-xs text-indigo-700">
-            Runner ID: <code className="font-mono">{registration.runner_id}</code>
+            Token expires in 15 minutes and can only be used once.
           </p>
-          <p className="mt-2 text-xs text-gray-700">
-            Copy the token below and run in your terminal:
-          </p>
-          <pre className="mt-1 overflow-x-auto rounded-md bg-gray-900 p-3 text-xs text-gray-100">
-{`taskforge-runner login --token ${registration.token}
-taskforge-runner start`}
+          <pre className="mt-2 overflow-x-auto rounded-md bg-gray-900 p-3 text-xs text-gray-100">
+            {command}
           </pre>
         </div>
       ) : null}

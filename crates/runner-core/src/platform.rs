@@ -18,6 +18,13 @@ struct RegisterApiResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+struct UpRequest {
+    pub token: String,
+    pub name: String,
+    pub adapter: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClaimedSession {
     pub session_id: String,
@@ -50,6 +57,7 @@ pub struct HeartbeatPayload {
     pub version: String,
     pub capabilities: Vec<String>,
     pub bindings: Vec<BindingDto>,
+    pub agents: Vec<AgentDto>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,6 +65,14 @@ pub struct HeartbeatPayload {
 pub struct BindingDto {
     pub repository_id: String,
     pub local_path: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentDto {
+    pub name: String,
+    pub adapter: Option<String>,
     pub status: String,
 }
 
@@ -154,6 +170,32 @@ impl PlatformClient {
         Ok(reg)
     }
 
+    pub async fn up(
+        &self,
+        token: &str,
+        name: &str,
+        adapter: &str,
+    ) -> Result<RunnerRegistration, RunnerError> {
+        let url = format!("{}/runner/up", self.base_url);
+        let body = UpRequest {
+            token: token.to_string(),
+            name: name.to_string(),
+            adapter: adapter.to_string(),
+        };
+        debug!("POST {}", url);
+        let resp = self
+            .client
+            .post(&url)
+            .headers(self.runner_headers(None)?)
+            .json(&body)
+            .send()
+            .await?;
+        let resp = self.handle_error(resp).await?;
+        let reg: RunnerRegistration = resp.json().await?;
+        info!("runner up: registered {}", reg.runner_id);
+        Ok(reg)
+    }
+
     pub async fn heartbeat(
         &self,
         runner_id: &str,
@@ -161,6 +203,7 @@ impl PlatformClient {
         version: &str,
         capabilities: Vec<String>,
         bindings: Vec<BindingDto>,
+        agents: Vec<AgentDto>,
     ) -> Result<(), RunnerError> {
         let url = format!("{}/runner/heartbeat", self.base_url);
         let payload = HeartbeatPayload {
@@ -169,6 +212,7 @@ impl PlatformClient {
             version: version.to_string(),
             capabilities,
             bindings,
+            agents,
         };
         let resp = self
             .client

@@ -4,9 +4,9 @@ use std::process::Command as StdCommand;
 use std::sync::Arc;
 use std::time::Duration;
 use taskforge_runner_core::{
-    AcpAgentHost, AgentHost, AuthStore, BindingDto, ClaimedSession, LocalBindingStore, LocalSpool,
-    PlatformClient, RunnerConfig, RunnerError, RunnerRegistration, SessionEvent, StubAgentHost,
-    VERSION,
+    agent_discovery::discover_agents, AcpAgentHost, AgentHost, AuthStore, BindingDto,
+    ClaimedSession, LocalBindingStore, LocalSpool, PlatformClient, RunnerConfig, RunnerError,
+    RunnerRegistration, SessionEvent, StubAgentHost, VERSION,
 };
 use tokio::signal;
 use tokio::sync::{Mutex, mpsc};
@@ -50,6 +50,14 @@ enum Commands {
         local_path: String,
     },
 
+    /// Register and start the runner loop with a one-time token (like tailscale up).
+    Up {
+        #[arg(long)]
+        token: String,
+        #[arg(long)]
+        name: Option<String>,
+    },
+
     /// Start the runner loop.
     Start,
 
@@ -82,6 +90,7 @@ async fn main() -> Result<()> {
             repository_id,
             local_path,
         } => bind_repo(repository_id, local_path).await,
+        Commands::Up { token, name } => up(token, name).await,
         Commands::Start => start().await,
         Commands::Status => status().await,
         Commands::Doctor => doctor().await,
@@ -149,6 +158,30 @@ async fn register(name: String, project_id: String, adapter: String) -> Result<(
     Ok(())
 }
 
+async fn up(reg_token: String, name: Option<String>) -> Result<()> {
+    let config = RunnerConfig::load()?;
+    let client = client_for(&config);
+    let name = name.unwrap_or_else(|| default_runner_name());
+    let reg: RunnerRegistration = client.up(&reg_token, &name, "local").await?;
+
+    let auth = AuthStore::from_config_dir()?;
+    auth.save(Some(&reg.token), Some(&reg.runner_id))?;
+
+    let mut updated = config.clone();
+    updated.token = Some(reg.token);
+    updated.runner_id = Some(reg.runner_id);
+    updated.save()?;
+
+    info!("runner {} is up, starting loop", updated.runner_id.as_deref().unwrap_or(""));
+    start_with_config(updated).await
+}
+
+fn default_runner_name() -> String {
+    std::env::var("HOSTNAME")
+        .or_else(|_| std::env::var("COMPUTERNAME"))
+        .unwrap_or_else(|_| "local-runner".to_string())
+}
+
 async fn bind_repo(repository_id: String, local_path: String) -> Result<()> {
     let (mut config, _) = load_auth_and_config().await?;
     let store = LocalBindingStore::new();
@@ -203,6 +236,7 @@ async fn doctor() -> Result<()> {
             VERSION,
             capabilities(),
             bindings_for(&config),
+            vec![],
         )
         .await
     {
@@ -213,22 +247,15 @@ async fn doctor() -> Result<()> {
         }
     }
 
-    // Agent command exists (or default stub)
-    if let Some(cmd) = &config.agent_command {
-        let program = cmd.split_whitespace().next().unwrap_or(cmd);
-        match StdCommand::new("sh")
-            .arg("-c")
-            .arg(format!("command -v {}", program))
-            .output()
-        {
-            Ok(output) if output.status.success() => {
-                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                println!("Agent command:    OK ({})", path);
-            }
-            _ => println!("Agent command:    MISSING ({})", program),
-        }
+    // Agent auto-discovery
+    let discovered = discover_agents();
+    if discovered.is_empty() {
+        println!("Discovered agents: NONE");
     } else {
-        println!("Agent command:    OK (using stub agent)");
+        println!("Discovered agents:");
+        for a in &discovered {
+            println!("  - {} ({}) -> {}", a.name, a.adapter, a.path);
+        }
     }
 
     // Bindings
@@ -257,6 +284,10 @@ async fn logout() -> Result<()> {
 
 async fn start() -> Result<()> {
     let (config, _auth) = load_auth_and_config().await?;
+    start_with_config(config).await
+}
+
+async fn start_with_config(config: RunnerConfig) -> Result<()> {
     let runner_id = config.runner_id.clone().ok_or(RunnerError::NotRegistered)?;
     let token = config.token.clone().ok_or(RunnerError::NotAuthenticated)?;
     let client = Arc::new(PlatformClient::new(config.api_url.clone(), Some(token)));
@@ -264,6 +295,28 @@ async fn start() -> Result<()> {
     let busy = Arc::new(Mutex::new(false));
     let mut heartbeat = interval(Duration::from_secs(HEARTBEAT_INTERVAL_SECS));
     let mut claim_tick = interval(Duration::from_secs(CLAIM_INTERVAL_SECS));
+
+    let discovered = discover_agents();
+    let agent_dtos: Vec<_> = discovered
+        .iter()
+        .map(|a| taskforge_runner_core::platform::AgentDto {
+            name: a.name.clone(),
+            adapter: Some(a.adapter.clone()),
+            status: "online".to_string(),
+        })
+        .collect();
+    let mut caps = capabilities();
+    for a in &discovered {
+        if !caps.contains(&a.name) {
+            caps.push(a.name.clone());
+        }
+    }
+
+    if !discovered.is_empty() {
+        info!("discovered agents: {}", discovered.iter().map(|a| &a.name).cloned().collect::<Vec<_>>().join(", "));
+    } else {
+        warn!("no supported agents found in PATH; session execution will fall back to stub");
+    }
 
     info!("runner {} starting", runner_id);
 
@@ -275,8 +328,9 @@ async fn start() -> Result<()> {
                     &runner_id,
                     status,
                     VERSION,
-                    capabilities(),
+                    caps.clone(),
                     bindings_for(&config),
+                    agent_dtos.clone(),
                 ).await {
                     warn!("heartbeat failed: {}", e);
                 }
