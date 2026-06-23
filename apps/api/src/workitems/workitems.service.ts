@@ -50,6 +50,36 @@ export class WorkItemsService {
     return workItem;
   }
 
+  async findSessions(id: string, actorId: string) {
+    const workItem = await this.prisma.workItem.findUnique({
+      where: { id },
+      select: { projectId: true },
+    });
+    if (!workItem) {
+      throw new NotFoundException("Work item not found");
+    }
+    await this.projects.requireAccess(actorId, workItem.projectId, "viewer");
+
+    const sessions = await this.prisma.agentSession.findMany({
+      where: { workItemId: id },
+      include: { runner: true },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return sessions.map((s) => ({
+      id: s.id,
+      workItemId: s.workItemId,
+      status: s.status,
+      mode: s.mode,
+      workingDirectory: s.workingDirectory,
+      runnerId: s.runnerId,
+      runnerName: s.runner?.name ?? null,
+      acpAgentInfoJson: (s.acpAgentInfoJson ?? {}) as Record<string, unknown>,
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt,
+    }));
+  }
+
   async updateStatus(
     id: string,
     input: UpdateWorkItemStatusInput,

@@ -60,25 +60,22 @@ impl AgentHost for StubAgentHost {
             .working_directory
             .clone()
             .unwrap_or_else(|| "/workspace".to_string());
-        let events = vec![
+        let mut next_seq = session.next_seq;
+        let event_templates: Vec<(&str, Value)> = vec![
             (
-                1u64,
                 "session.started",
                 json!({ "session_id": session.session_id, "mode": session.mode, "cwd": cwd }),
             ),
             (
-                2u64,
                 "command.started",
                 json!({ "command": "analyze prompt", "cwd": cwd }),
             ),
             (
-                3u64,
                 "command.output",
                 json!({ "stdout": "analyzing work item...", "stderr": "" }),
             ),
-            (4u64, "command.finished", json!({ "exit_code": 0 })),
+            ("command.finished", json!({ "exit_code": 0 })),
             (
-                5u64,
                 "file.changed",
                 json!({
                     "path": "src/lib.rs",
@@ -87,20 +84,20 @@ impl AgentHost for StubAgentHost {
                 }),
             ),
             (
-                6u64,
                 "verification.started",
                 json!({ "tool": "cargo test", "args": ["--lib"] }),
             ),
-            (7u64, "verification.passed", json!({ "tool": "cargo test" })),
+            ("verification.passed", json!({ "tool": "cargo test" })),
             (
-                8u64,
                 "session.completed",
                 json!({ "session_id": session.session_id, "outcome": "success" }),
             ),
         ];
 
-        for (seq, event_type, payload) in events {
+        for (event_type, payload) in event_templates {
             sleep(Duration::from_millis(800)).await;
+            let seq = next_seq;
+            next_seq += 1;
             if event_tx
                 .send(SessionEvent {
                     seq,

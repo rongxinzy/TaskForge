@@ -1,7 +1,8 @@
 import { apiFetch } from "@/lib/api";
-import { WorkItem } from "@/lib/types";
+import { Session, WorkItem } from "@/lib/types";
 import { StatusSelect } from "@/components/status-select";
 import { StartSessionForm } from "@/components/start-session-form";
+import { WorkItemSessions } from "@/components/work-item-sessions";
 
 export default async function WorkItemPage({
   params,
@@ -9,10 +10,14 @@ export default async function WorkItemPage({
   params: { id: string; workItemId: string };
 }) {
   let workItem: WorkItem | null = null;
+  let sessions: Session[] = [];
   let error: string | null = null;
 
   try {
-    workItem = await apiFetch<WorkItem>(`/api/work-items/${params.workItemId}`);
+    [workItem, sessions] = await Promise.all([
+      apiFetch<WorkItem>(`/api/work-items/${params.workItemId}`),
+      apiFetch<Session[]>(`/api/work-items/${params.workItemId}/sessions`),
+    ]);
   } catch (e) {
     error = e instanceof Error ? e.message : "Failed to load work item";
   }
@@ -133,8 +138,9 @@ export default async function WorkItemPage({
         ) : null}
       </div>
 
-      <aside>
+      <aside className="space-y-6">
         <StartSessionForm projectId={params.id} workItemId={workItem.id} />
+        <WorkItemSessions sessions={sessions} />
       </aside>
     </div>
   );

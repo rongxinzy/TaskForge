@@ -235,6 +235,21 @@ export class SessionsService {
     return session;
   }
 
+  async requireAccess(id: string, actorId: string) {
+    const session = await this.prisma.agentSession.findUnique({
+      where: { id },
+      include: { workItem: true },
+    });
+    if (!session) {
+      throw new NotFoundException("Session not found");
+    }
+    await this.projects.requireAccess(
+      actorId,
+      session.workItem.projectId,
+      "viewer",
+    );
+  }
+
   async findEvents(id: string, actorId: string, afterSeq?: number) {
     const session = await this.prisma.agentSession.findUnique({
       where: { id },
@@ -318,6 +333,7 @@ export class SessionsService {
     );
 
     const resumable: SessionStatus[] = [
+      "completed",
       "failed",
       "interrupted",
       "awaiting_input",
@@ -337,7 +353,19 @@ export class SessionsService {
         where: { sessionId: id },
         _max: { seq: true },
       });
-      const seq = nextEventSeq(maxSeq._max.seq);
+      let seq = nextEventSeq(maxSeq._max.seq);
+
+      if (input.instruction?.trim()) {
+        await tx.sessionEvent.create({
+          data: {
+            sessionId: id,
+            seq,
+            type: "human.input",
+            payload: { body: input.instruction.trim(), actorId },
+          },
+        });
+        seq = nextEventSeq(seq);
+      }
 
       await tx.sessionEvent.create({
         data: {
@@ -376,7 +404,10 @@ export class SessionsService {
           actorId,
           targetType: "session",
           targetId: id,
-          payload: { workingDirectory: input.workingDirectory ?? null },
+          payload: {
+            workingDirectory: input.workingDirectory ?? null,
+            instruction: input.instruction ?? null,
+          },
         },
       });
 

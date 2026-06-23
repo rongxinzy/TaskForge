@@ -24,6 +24,11 @@ export class WorkItemsController {
     return this.workItems.findOne(id, user.id);
   }
 
+  @Get(":id/sessions")
+  findSessions(@Param("id") id: string, @ReqUser() user: RequestUser) {
+    return this.workItems.findSessions(id, user.id);
+  }
+
   @Patch(":id/status")
   updateStatus(
     @Param("id") id: string,

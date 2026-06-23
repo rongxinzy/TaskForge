@@ -4,9 +4,10 @@ use std::process::Command as StdCommand;
 use std::sync::Arc;
 use std::time::Duration;
 use taskforge_runner_core::{
-    agent_discovery::discover_agents, AcpAgentHost, AgentHost, AuthStore, BindingDto,
-    ClaimedSession, LocalBindingStore, LocalSpool, PlatformClient, RunnerConfig, RunnerError,
-    RunnerRegistration, SessionEvent, StubAgentHost, VERSION,
+    agent_discovery::{discover_agents, DiscoveredAgent},
+    AcpAgentHost, AgentHost, AuthStore, BindingDto, ClaimedSession, LocalBindingStore, LocalSpool,
+    PlatformClient, RunnerConfig, RunnerError, RunnerRegistration, SessionEvent, StubAgentHost,
+    VERSION,
 };
 use tokio::signal;
 use tokio::sync::{Mutex, mpsc};
@@ -287,7 +288,49 @@ async fn start() -> Result<()> {
     start_with_config(config).await
 }
 
-async fn start_with_config(config: RunnerConfig) -> Result<()> {
+fn program_name_from_path(path: &str) -> Option<&str> {
+    std::path::Path::new(path)
+        .file_name()
+        .and_then(|n| n.to_str())
+}
+
+fn resolve_agent_command(
+    current: Option<&str>,
+    discovered: &[DiscoveredAgent],
+) -> Option<String> {
+    let current_program = current.and_then(|c| c.split_whitespace().next());
+
+    // Respect an explicit stub agent selection.
+    if current_program == Some("stub") {
+        return current.map(|s| s.to_string());
+    }
+
+    let current_is_discovered = current_program.map_or(false, |p| {
+        discovered.iter().any(|a| {
+            a.name == p || program_name_from_path(&a.path).map_or(false, |n| n == p)
+        })
+    });
+
+    if current_is_discovered {
+        return current.map(|s| s.to_string());
+    }
+
+    // No explicit, valid agent command: auto-select from discovered agents.
+    const PREFERRED_ORDER: &[&str] = &["opencode", "claude", "codex", "kimi"];
+    for name in PREFERRED_ORDER {
+        if let Some(agent) = discovered.iter().find(|a| &a.name == *name) {
+            let program = program_name_from_path(&agent.path)
+                .unwrap_or(name)
+                .to_string();
+            return Some(format!("{} acp", program));
+        }
+    }
+
+    // Nothing discovered: keep the current value (may be None -> fallback to stub).
+    current.map(|s| s.to_string())
+}
+
+async fn start_with_config(mut config: RunnerConfig) -> Result<()> {
     let runner_id = config.runner_id.clone().ok_or(RunnerError::NotRegistered)?;
     let token = config.token.clone().ok_or(RunnerError::NotAuthenticated)?;
     let client = Arc::new(PlatformClient::new(config.api_url.clone(), Some(token)));
@@ -297,6 +340,16 @@ async fn start_with_config(config: RunnerConfig) -> Result<()> {
     let mut claim_tick = interval(Duration::from_secs(CLAIM_INTERVAL_SECS));
 
     let discovered = discover_agents();
+
+    let previous_command = config.agent_command.clone();
+    config.agent_command = resolve_agent_command(config.agent_command.as_deref(), &discovered);
+    if config.agent_command != previous_command {
+        if let Err(e) = config.save() {
+            warn!("failed to save runner config after agent auto-discovery: {}", e);
+        } else {
+            info!("auto-discovery updated agent_command to {:?}", config.agent_command);
+        }
+    }
     let agent_dtos: Vec<_> = discovered
         .iter()
         .map(|a| taskforge_runner_core::platform::AgentDto {

@@ -69,6 +69,15 @@ Markdown files should use concise headings, short paragraphs, and fenced code bl
 
 TypeScript packages should use strict mode. Prefer descriptive names that match the PRD object model. NestJS controllers use kebab-case paths. Rust crates use `snake_case` modules and error types with `thiserror`.
 
+## Frontend UI (ai-elements 优先)
+
+The `apps/web` Next.js app has adopted [ai-elements](https://www.npmjs.com/package/ai-elements) as the preferred AI-native component layer (built on shadcn/ui).
+
+- When building or refactoring UI that renders AI chat messages, reasoning, tool calls, terminal output, code blocks, conversations, or related AI-native patterns, **prefer an installed ai-elements component first**.
+- If ai-elements does not provide a component that fits the exact semantic need (e.g. a domain-specific visualization that has no equivalent in the registry), implement a **minimal custom wrapper that still leverages the closest ai-elements primitives** (`Message`, `Tool`, `CodeBlock`, `Terminal`, etc.) and ask the user only when no reasonable primitive exists.
+- Do not re-create from scratch what ai-elements already ships (e.g. collapsible tool cards, syntax highlighted code blocks, reasoning panels, auto-scrolling conversation containers).
+- Add new ai-elements components with the project package runner: `pnpm dlx ai-elements@latest add <component>`.
+
 ## Testing Guidelines
 
 Add tests beside the module they cover and document the test runner command. Core behavior must cover:

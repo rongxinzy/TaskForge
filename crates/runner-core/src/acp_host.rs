@@ -586,12 +586,21 @@ fn map_update_type(update_type: &str) -> &'static str {
     }
 }
 
+fn expand_tilde(path: &str) -> PathBuf {
+    if let Some(rest) = path.strip_prefix("~/") {
+        if let Some(home) = dirs::home_dir() {
+            return home.join(rest);
+        }
+    }
+    PathBuf::from(path)
+}
+
 fn resolve_working_directory(
     session: &ClaimedSession,
     host: &AcpAgentHost,
 ) -> PathBuf {
     if let Some(dir) = session.working_directory.as_ref() {
-        return PathBuf::from(dir);
+        return expand_tilde(dir);
     }
     if let Some(path) = host.local_path_for_repo(session.repository_id.as_ref()) {
         return path;
@@ -642,6 +651,7 @@ mod tests {
             prompt: "do something".into(),
             artifact_upload_url: "http://example.com".into(),
             next_seq: 1,
+            working_directory: None,
         };
         let (tx, mut rx) = mpsc::channel(128);
 
@@ -748,5 +758,13 @@ mod tests {
         );
         assert_eq!(host.local_path_for_repo(Some(&"missing".into())), None);
         assert_eq!(host.local_path_for_repo(None), None);
+    }
+
+    #[test]
+    fn expands_tilde_to_home_directory() {
+        let home = dirs::home_dir().expect("home dir available");
+        assert_eq!(expand_tilde("~/workspace"), home.join("workspace"));
+        assert_eq!(expand_tilde("/absolute/path"), PathBuf::from("/absolute/path"));
+        assert_eq!(expand_tilde("relative/path"), PathBuf::from("relative/path"));
     }
 }

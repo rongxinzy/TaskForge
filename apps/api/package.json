@@ -13,13 +13,19 @@
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
+    "@nestjs/bullmq": "^11.0.0",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.0",
-    "@nestjs/platform-express": "^11.0.0",
-    "@nestjs/bullmq": "^11.0.0",
     "@nestjs/jwt": "^11.0.0",
     "@nestjs/passport": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "@prisma/client": "^6.6.0",
+    "@taskforge/contracts": "workspace:*",
+    "@taskforge/db": "workspace:*",
+    "@taskforge/domain": "workspace:*",
+    "@taskforge/pi-agent": "workspace:*",
+    "ai": "^6.0.208",
     "bcryptjs": "^3.0.0",
     "bullmq": "^5.56.0",
     "cookie-parser": "^1.4.7",
@@ -28,12 +34,7 @@
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "zod": "^3.25.0",
-    "@prisma/client": "^6.6.0",
-    "@taskforge/db": "workspace:*",
-    "@taskforge/contracts": "workspace:*",
-    "@taskforge/domain": "workspace:*",
-    "@taskforge/pi-agent": "workspace:*"
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",

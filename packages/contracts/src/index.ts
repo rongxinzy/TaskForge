@@ -130,6 +130,7 @@ export type CreateSessionInput = z.infer<typeof CreateSessionInput>;
 
 export const ResumeSessionInput = z.object({
   workingDirectory: z.string().max(2000).optional(),
+  instruction: z.string().max(5000).optional(),
 });
 export type ResumeSessionInput = z.infer<typeof ResumeSessionInput>;
 

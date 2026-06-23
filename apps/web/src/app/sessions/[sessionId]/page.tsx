@@ -1,6 +1,6 @@
 import { apiFetch } from "@/lib/api";
 import { Session, SessionEvent } from "@/lib/types";
-import { SessionEventStream } from "@/components/session-event-stream";
+import { SessionGenerativeUI } from "@/components/session-generative-ui";
 import { SessionResume } from "@/components/session-resume";
 import { Status, StatusIndicator, StatusLabel } from "@/components/ui/status";
 
@@ -58,57 +58,53 @@ export default async function SessionPage({
     return <div className="text-gray-600">Loading session...</div>;
   }
 
+  const agentName = session.acpAgentInfoJson?.agentName;
+
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Session</h1>
-        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-md bg-white p-3 shadow-sm border border-gray-200">
-            <div className="text-xs uppercase tracking-wide text-gray-500">
+    <div className="-mx-4 -my-6 flex h-[calc(100vh-4.5rem)] flex-col">
+      <div className="shrink-0 border-b px-4 py-2">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
               Status
-            </div>
-            <div className="mt-1">
-              <Status status={sessionStatus(session.status)} className="text-xs">
-                <StatusIndicator />
-                <StatusLabel>
-                  {session.status.replace(/_/g, " ")}
-                </StatusLabel>
-              </Status>
-            </div>
+            </span>
+            <Status status={sessionStatus(session.status)} className="text-xs">
+              <StatusIndicator />
+              <StatusLabel>{session.status.replace(/_/g, " ")}</StatusLabel>
+            </Status>
           </div>
-          <div className="rounded-md bg-white p-3 shadow-sm border border-gray-200">
-            <div className="text-xs uppercase tracking-wide text-gray-500">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
               Mode
-            </div>
-            <div className="mt-1 font-medium text-gray-900">/{session.mode}</div>
+            </span>
+            <span className="font-medium">/{session.mode}</span>
           </div>
-          <div className="rounded-md bg-white p-3 shadow-sm border border-gray-200">
-            <div className="text-xs uppercase tracking-wide text-gray-500">
-              Runner / Agent
-            </div>
-            <div className="mt-1 font-medium text-gray-900">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              Runner
+            </span>
+            <span className="font-medium">
               {session.runnerName ?? session.runnerId ?? "Unassigned"}
-              {session.acpAgentInfoJson?.agentName ? (
-                <span className="ml-2 text-sm text-gray-600">
-                  / {session.acpAgentInfoJson.agentName}
-                </span>
-              ) : null}
-            </div>
+            </span>
+            {agentName ? (
+              <span className="text-xs text-muted-foreground">/ {agentName}</span>
+            ) : null}
           </div>
-          <div className="rounded-md bg-white p-3 shadow-sm border border-gray-200">
-            <div className="text-xs uppercase tracking-wide text-gray-500">
-              Working directory
-            </div>
-            <div className="mt-1 break-all font-mono text-sm text-gray-900">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              CWD
+            </span>
+            <span className="truncate font-mono text-xs">
               {session.workingDirectory ?? "Default"}
-            </div>
+            </span>
           </div>
         </div>
       </div>
 
-      <SessionResume session={session} events={events} />
-
-      <SessionEventStream sessionId={session.id} initialEvents={events} />
+      <div className="flex flex-1 flex-col overflow-hidden px-4 py-3">
+        <SessionResume session={session} events={events} />
+        <SessionGenerativeUI session={session} initialEvents={events} />
+      </div>
     </div>
   );
 }
