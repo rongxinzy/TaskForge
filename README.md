@@ -1,165 +1,205 @@
-# TaskForge
+# TaskForge —— 下一代人机协作的探索
 
-TaskForge is a database-driven engineering task execution control plane. v0.1 focuses on the local-runner-first loop: a team can view WorkItems, compile ContextBundles, start AgentSessions on a local Runner, and observe the execution in real time.
+[English Version](README.en.md)
 
-## Repository structure
+[![Build Local Runner](https://github.com/hawkli-1994/TaskForge/actions/workflows/runner.yml/badge.svg)](https://github.com/hawkli-1994/TaskForge/actions/workflows/runner.yml)
+[![Docker Images](https://github.com/hawkli-1994/TaskForge/actions/workflows/docker.yml/badge.svg)](https://github.com/hawkli-1994/TaskForge/actions/workflows/docker.yml)
+
+> 当 AI 写代码的速度已经超过人类评审、测试、同步的速度，旧的瀑布、敏捷、DevOps 流程正在集体失效。TaskForge 不是又一个 ChatGPT 套壳，而是一次对“人类与 Agent 如何共享上下文、如何协同工作”的底层重构。
+
+## 我们为什么做这件事
+
+软件时代和互联网时代培养了海量程序员，而 AI 时代真正消耗算力的主战场依然是 **Coding**。
+
+OpenAI、Anthropic 已经把闭源模型朝着 Coding 特化的方向疯狂推进。可以预见，AI 终将胜任绝大多数工作，但在中短期内，写代码仍是最大、最刚需、算力消耗最惊人的应用领域。
+
+当 AI 一天能完成几十个需求、产出上万行代码时，一个产品里的两个开发者即使早上刚对过信息，下午也可能在各自完全不同的上下文里推进。人类与人类之间、人类与 Agent 之间的**上下文共享**，已经成为新的瓶颈。
+
+TaskForge 的定位很简单：
+
+**探索下一代协作方式。**
+
+我们用数据库驱动的控制平面把任务（WorkItem）、上下文（ContextBundle）、执行（AgentSession）和轨迹（SessionEvent）统一起来，让团队、Runner、Agent 在同一个事实源上协作，而不是在 Slack、Issue、本地终端和无数个 Copilot 窗口之间失去同步。
+
+## 核心设计
+
+- **数据库即控制平面**：所有状态、事件、上下文、审批都落在持久化事件流里，可审计、可回放、可恢复。
+- **本地优先**：v0.1 聚焦 Local Runner，代码执行在你自己的机器上，无云端黑箱。
+- **Agent Session**：一次任务对应一个会话，事件按序追加，状态机驱动，支持 resume、中断、等待输入。
+- **Context Bundle**：把需求、代码上下文、历史、推荐命令打包成 Agent 可消费的输入，避免每次都从头加载上下文。
+- **ACP 兼容**：Runner 与 Agent 之间采用 ACP 协议交互，未来可替换或接入不同 Agent 后端。
+
+## 仓库结构
 
 ```text
 apps/
-  web/            Next.js UI
-  api/            NestJS REST API + Runner control plane
-  worker/         BullMQ background workers
+  web/            Next.js 14 管理界面
+  api/            NestJS REST API + Runner 控制平面
+  worker/         BullMQ 后台任务
 packages/
-  db/             Prisma schema (SQLite dev, PostgreSQL prod)
-  contracts/      Zod DTOs shared by API/Web/Runner
-  domain/         Pure state machines and permission helpers
-  repository-provider/  Provider port (placeholder)
+  db/             Prisma 多数据库 schema
+  contracts/      Zod DTO，API/Web/Runner 共享
+  domain/         纯状态机与权限辅助函数
+  repository-provider/  仓库 Provider 抽象端口
 crates/
-  runner/         Rust Local Runner CLI
-  runner-core/    ACP host, platform client, spool, redaction
+  runner/         Rust 本地 Runner CLI
+  runner-core/    ACP host、平台客户端、脱敏、日志回放
 docs/
   v0.1_prd.md
   v0.1_technical_design.md
 ```
 
-## Prerequisites
+## Quick Start
 
-- Node.js >= 22 and pnpm >= 10
-- Rust >= 1.89
-- Docker + Docker Compose (for Postgres, Redis, MinIO in production-like mode)
+### 方式一：Docker Compose 一键启动（推荐）
 
-## Quick start (Docker Compose one-click)
-
-The fastest way to run the whole stack is with the pre-built images from GitHub Container Registry:
+需要 Docker + Docker Compose。
 
 ```bash
-# 1. Clone or pull the latest code
 git clone https://github.com/hawkli-1994/TaskForge.git
 cd TaskForge
 
-# 2. (Optional) configure environment; see .env.example
-cp .env.example .env
-# edit .env if you want to enable GitLab integration
+# 可选：配置环境变量
+# cp .env.example .env
 
-# 3. Start everything
 docker compose up -d
 ```
 
-Services:
+服务地址：
 
 - Web UI: http://localhost:3000
 - API: http://localhost:3001/api
 - PostgreSQL: localhost:5432
 - Redis: localhost:6379
-- MinIO: http://localhost:9000 (console: http://localhost:9001)
+- MinIO: http://localhost:9000（控制台 http://localhost:9001）
 
-Docker Compose will automatically:
-
-1. Start Postgres, Redis and MinIO.
-2. Run Prisma Postgres migrations in the API container.
-3. Start API, Web and Worker containers.
-
-To pull the latest images instead of building locally:
+更新到最新镜像：
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-To stop:
+停止：
 
 ```bash
 docker compose down
 ```
 
-## Local development
+### 方式二：本地源码开发
 
-If you prefer to run from source:
+需要 Node.js >= 22、pnpm >= 10、Rust >= 1.89。
 
 ```bash
-# 1. Install dependencies
+# 1. 安装依赖
 pnpm install
 
-# 2. Start local infrastructure (optional for dev; SQLite is used by default)
+# 2. 启动本地基础设施（可选；开发默认使用 SQLite）
 docker compose up -d postgres redis minio
 
-# 3. Generate Prisma client and migrate the dev SQLite database
+# 3. 生成 Prisma Client 并迁移开发数据库
 export DATABASE_URL="file:./packages/db/dev.db"
 pnpm db:generate
 pnpm db:migrate:dev
 pnpm db:seed
 
-# 4. Start API, Web and Worker in parallel
+# 4. 同时启动 API、Web、Worker
 pnpm dev
 ```
 
 - Web UI: http://localhost:3000
 - API: http://localhost:3001/api
 
-## Runner quick start
+### 方式三：Rust Runner CLI 直连
 
-GitHub Actions automatically builds release binaries for Linux, macOS and Windows. You can download the latest binary from the Actions artifacts or from a GitHub Release page.
+GitHub Actions 会自动为 Linux、macOS、Windows 构建 Release 二进制文件。
+
+**下载地址：**
+
+- 最新 Release：https://github.com/hawkli-1994/TaskForge/releases/latest
+- CI Artifacts（每 push 到 main 生成）：https://github.com/hawkli-1994/TaskForge/actions/workflows/runner.yml
+
+使用 [GitHub CLI](https://cli.github.com/) 下载最新 Release（以 Linux 为例）：
 
 ```bash
-# Linux example
+gh release download --repo hawkli-1994/TaskForge --latest \
+  --pattern 'taskforge-runner-x86_64-unknown-linux-gnu'
 chmod +x taskforge-runner-x86_64-unknown-linux-gnu
-./taskforge-runner-x86_64-unknown-linux-gnu login --token dev-token
-./taskforge-runner-x86_64-unknown-linux-gnu register --name my-runner --project-id <PROJECT_ID>
-./taskforge-runner-x86_64-unknown-linux-gnu start
 ```
 
-Or run from source:
+macOS（Apple Silicon）：
+
+```bash
+gh release download --repo hawkli-1994/TaskForge --latest \
+  --pattern 'taskforge-runner-aarch64-apple-darwin'
+chmod +x taskforge-runner-aarch64-apple-darwin
+```
+
+Windows：
+
+```powershell
+gh release download --repo hawkli-1994/TaskForge --latest `
+  --pattern 'taskforge-runner-x86_64-pc-windows-msvc.exe'
+```
+
+启动 Runner：
+
+```bash
+# 登录并注册到你的项目
+./taskforge-runner login --token <你的 Runner Token>
+./taskforge-runner register --name my-runner --project-id <PROJECT_ID>
+
+# 启动并等待任务
+./taskforge-runner start
+```
+
+Runner Token 可在 Web UI 的 Runner 设置页或 `POST /api/runner/tokens` 创建。
+
+也可以直接从源码运行：
 
 ```bash
 cd crates/runner
-cargo run --bin taskforge-runner -- login --token dev-token
+cargo run --bin taskforge-runner -- login --token <TOKEN>
 cargo run --bin taskforge-runner -- register --name my-runner --project-id <PROJECT_ID>
 cargo run --bin taskforge-runner -- start
 ```
 
-## Scripts
+## 常用脚本
 
 ```bash
-pnpm lint              # tsc --noEmit across packages
-pnpm typecheck         # same as lint
-pnpm test              # unit tests (packages/domain, apps/api)
-pnpm test:integration  # API integration tests against SQLite
-pnpm db:validate       # validate SQLite + PostgreSQL Prisma schemas
-pnpm cargo:test        # Rust tests
+pnpm lint              # 全仓 TypeScript 类型检查
+pnpm typecheck         # 同 lint
+pnpm test              # packages/domain、apps/api 单元测试
+pnpm test:integration  # API 集成测试（SQLite）
+pnpm db:validate       # 校验 SQLite + PostgreSQL Prisma schema
+pnpm cargo:test        # Rust 测试
 ```
 
-## v0.1 scope notes
+## v0.1 范围说明
 
-- Local Runner is the only execution target; no cloud execution.
-- ACP-compatible Agent integration is stubbed behind the Runner `agent_host` module; real ACP lifecycle can be swapped in without changing the platform.
-- GitHub/GitLab Provider SDK integration is behind an abstract port. GitLab metadata fetching is implemented; GitHub remains a stub.
-- See `docs/v0.1_prd.md` and `docs/v0.1_technical_design.md` for full requirements.
+- 仅支持 Local Runner，不包含云端执行。
+- ACP 兼容的 Agent 集成已封装在 Runner 的 `agent_host` 模块，可替换真实 ACP 生命周期而不改动平台代码。
+- GitHub/GitLab Provider SDK 通过抽象端口接入，当前已实现 GitLab 元数据获取，GitHub 为占位实现。
+- 完整需求与设计见 `docs/v0.1_prd.md` 和 `docs/v0.1_technical_design.md`。
 
-## GitLab integration
+## GitLab 集成
 
-To enable GitLab repository linking, set these environment variables before starting the API:
+启动 API 前设置：
 
 ```bash
 export GITLAB_API_TOKEN="<your-personal-access-token>"
 export GITLAB_BASE_URL="http://172.18.5.179:8180"
 ```
 
-Then create a repository via the API:
+通过 API 创建仓库绑定：
 
 ```bash
 curl -X POST http://localhost:3001/api/projects/<projectId>/repositories \
   -H "Content-Type: application/json" \
-  -H "x-taskforge-user-id: dev-user" \
-  -H "x-taskforge-project-role: maintainer" \
+  -H "Authorization: Bearer <ACCESS_TOKEN>" \
   -d '{"provider":"gitlab","url":"http://172.18.5.179:8180/namespace/project"}'
 ```
 
-The API will call GitLab to resolve `default_branch` and `project_id`.
+## License
 
-A manual test script is also available:
-
-```bash
-GITLAB_API_TOKEN="<token>" \
-GITLAB_REPO_URL="http://172.18.5.179:8180/namespace/project" \
-  pnpm --filter @taskforge/api exec tsx scripts/test-gitlab.ts
-```
+MIT © TaskForge Contributors
