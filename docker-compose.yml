@@ -60,6 +60,11 @@ services:
       TASKFORGE_DEV_AUTH: ${TASKFORGE_DEV_AUTH:-false}
       GITLAB_API_TOKEN: ${GITLAB_API_TOKEN:-}
       GITLAB_BASE_URL: ${GITLAB_BASE_URL:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -91,6 +96,11 @@ services:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL:-postgresql://taskforge:taskforge@postgres:5432/taskforge}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
     depends_on:
       postgres:
         condition: service_healthy
