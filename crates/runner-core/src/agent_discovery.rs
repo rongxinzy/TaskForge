@@ -20,13 +20,11 @@ pub fn discover_agents() -> Vec<DiscoveredAgent> {
         for cmd in *commands {
             if let Ok(path) = which::which(cmd) {
                 let path_str = path.to_string_lossy().to_string();
-                found
-                    .entry(name.to_string())
-                    .or_insert(DiscoveredAgent {
-                        name: name.to_string(),
-                        adapter: name.to_string(),
-                        path: path_str,
-                    });
+                found.entry(name.to_string()).or_insert(DiscoveredAgent {
+                    name: name.to_string(),
+                    adapter: name.to_string(),
+                    path: path_str,
+                });
                 break;
             }
         }

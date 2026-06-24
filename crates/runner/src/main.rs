@@ -3,10 +3,10 @@ use clap::{Parser, Subcommand};
 use std::sync::Arc;
 use std::time::Duration;
 use taskforge_runner_core::{
-    agent_discovery::{discover_agents, DiscoveredAgent},
     AcpAgentHost, AgentHost, AuthStore, BindingDto, ClaimedSession, LocalBindingStore, LocalSpool,
     PlatformClient, RunnerConfig, RunnerError, RunnerRegistration, SessionEvent, StubAgentHost,
     VERSION,
+    agent_discovery::{DiscoveredAgent, discover_agents},
 };
 use tokio::signal;
 use tokio::sync::{Mutex, mpsc};
@@ -164,11 +164,7 @@ async fn register(name: String, project_id: String, adapter: String) -> Result<(
     Ok(())
 }
 
-async fn up(
-    reg_token: String,
-    name: Option<String>,
-    platform_url: Option<String>,
-) -> Result<()> {
+async fn up(reg_token: String, name: Option<String>, platform_url: Option<String>) -> Result<()> {
     let config = RunnerConfig::load()?;
     let platform_url = platform_url
         .or_else(|| std::env::var("TASKFORGE_API_URL").ok())
@@ -177,7 +173,7 @@ async fn up(
         .as_deref()
         .unwrap_or("http://localhost:3001/api");
     let client = PlatformClient::new(platform_url_str, config.token.clone());
-    let name = name.unwrap_or_else(|| default_runner_name());
+    let name = name.unwrap_or_else(default_runner_name);
     let reg: RunnerRegistration = client
         .up(&reg_token, &name, "local", Some(platform_url_str))
         .await?;
@@ -317,10 +313,7 @@ fn program_name_from_path(path: &str) -> Option<&str> {
         .and_then(|n| n.to_str())
 }
 
-fn resolve_agent_command(
-    current: Option<&str>,
-    discovered: &[DiscoveredAgent],
-) -> Option<String> {
+fn resolve_agent_command(current: Option<&str>, discovered: &[DiscoveredAgent]) -> Option<String> {
     let current_program = current.and_then(|c| c.split_whitespace().next());
 
     // Respect an explicit stub agent selection.
@@ -328,10 +321,10 @@ fn resolve_agent_command(
         return current.map(|s| s.to_string());
     }
 
-    let current_is_discovered = current_program.map_or(false, |p| {
-        discovered.iter().any(|a| {
-            a.name == p || program_name_from_path(&a.path).map_or(false, |n| n == p)
-        })
+    let current_is_discovered = current_program.is_some_and(|p| {
+        discovered
+            .iter()
+            .any(|a| a.name == p || program_name_from_path(&a.path) == Some(p))
     });
 
     if current_is_discovered {
@@ -341,7 +334,7 @@ fn resolve_agent_command(
     // No explicit, valid agent command: auto-select from discovered agents.
     const PREFERRED_ORDER: &[&str] = &["opencode", "claude", "codex", "kimi"];
     for name in PREFERRED_ORDER {
-        if let Some(agent) = discovered.iter().find(|a| &a.name == *name) {
+        if let Some(agent) = discovered.iter().find(|a| a.name == **name) {
             let program = program_name_from_path(&agent.path)
                 .unwrap_or(name)
                 .to_string();
@@ -368,9 +361,15 @@ async fn start_with_config(mut config: RunnerConfig) -> Result<()> {
     config.agent_command = resolve_agent_command(config.agent_command.as_deref(), &discovered);
     if config.agent_command != previous_command {
         if let Err(e) = config.save() {
-            warn!("failed to save runner config after agent auto-discovery: {}", e);
+            warn!(
+                "failed to save runner config after agent auto-discovery: {}",
+                e
+            );
         } else {
-            info!("auto-discovery updated agent_command to {:?}", config.agent_command);
+            info!(
+                "auto-discovery updated agent_command to {:?}",
+                config.agent_command
+            );
         }
     }
     let agent_dtos: Vec<_> = discovered
@@ -389,7 +388,15 @@ async fn start_with_config(mut config: RunnerConfig) -> Result<()> {
     }
 
     if !discovered.is_empty() {
-        info!("discovered agents: {}", discovered.iter().map(|a| &a.name).cloned().collect::<Vec<_>>().join(", "));
+        info!(
+            "discovered agents: {}",
+            discovered
+                .iter()
+                .map(|a| &a.name)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
     } else {
         warn!("no supported agents found in PATH; session execution will fall back to stub");
     }
