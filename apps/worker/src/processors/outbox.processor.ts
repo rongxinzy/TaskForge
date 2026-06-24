@@ -1,8 +1,11 @@
 import { PrismaClient } from "@taskforge/db";
 import { Worker, Job, UnrecoverableError, Queue } from "bullmq";
+import Redis from "ioredis";
 import type { RedisOptions } from "ioredis";
 import { OUTBOX_QUEUE, DISPATCH_QUEUE } from "../queue-names";
 import { createRedisConnection } from "../redis";
+
+const CLAIM_AVAILABLE_KEY = "runner:claims:available";
 
 type WorkItemLike = {
   id: string;
@@ -49,6 +52,7 @@ export function createOutboxProcessor(
 ): Worker {
   const connection = redis ?? createRedisConnection();
   const dispatchQueue = new Queue(DISPATCH_QUEUE, { connection });
+  const flagClient = new Redis(connection);
 
   return new Worker(
     OUTBOX_QUEUE,
@@ -153,6 +157,7 @@ export function createOutboxProcessor(
         ]);
 
         await dispatchQueue.add("dispatch", { sessionId: session.id });
+        await flagClient.set(CLAIM_AVAILABLE_KEY, "1");
       } catch (err) {
         const retryCount = event.retryCount + 1;
         const isUnrecoverable =
