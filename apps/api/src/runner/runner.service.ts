@@ -540,7 +540,7 @@ export class RunnerService {
       data: { status: "offline" },
     });
 
-    const releasedSessions = await this.prisma.agentSession.findMany({
+    const dispatchingSessions = await this.prisma.agentSession.findMany({
       where: {
         status: "dispatching",
         runnerId: { in: runnerIds },
@@ -548,11 +548,7 @@ export class RunnerService {
       select: { id: true, runnerId: true },
     });
 
-    if (releasedSessions.length === 0) {
-      return;
-    }
-
-    for (const session of releasedSessions) {
+    for (const session of dispatchingSessions) {
       const maxSeq = await this.prisma.sessionEvent.aggregate({
         where: { sessionId: session.id },
         _max: { seq: true },
@@ -578,7 +574,57 @@ export class RunnerService {
       ]);
     }
 
-    await this.redis.getClient().set(this.CLAIM_AVAILABLE_KEY, "1");
+    const runningSessions = await this.prisma.agentSession.findMany({
+      where: {
+        status: "running",
+        runnerId: { in: runnerIds },
+      },
+      include: { workItem: true },
+    });
+
+    for (const session of runningSessions) {
+      const maxSeq = await this.prisma.sessionEvent.aggregate({
+        where: { sessionId: session.id },
+        _max: { seq: true },
+      });
+      const seq = nextEventSeq(maxSeq._max.seq);
+      const workItemStatus = workItemStatusFromSessionResult("failed");
+      const workItemUpdate: { activeSessionId: null; status?: WorkItemStatus } =
+        { activeSessionId: null };
+      if (workItemStatus) {
+        workItemUpdate.status = workItemStatus;
+      }
+
+      await this.prisma.$transaction([
+        this.prisma.agentSession.update({
+          where: { id: session.id },
+          data: { status: "failed", completedAt: new Date() },
+        }),
+        this.prisma.sessionEvent.create({
+          data: {
+            sessionId: session.id,
+            seq,
+            type: "session.failed",
+            payload: {
+              reason: "runner_offline_timeout",
+              previousRunnerId: session.runnerId,
+            },
+          },
+        }),
+        ...(session.workItem.activeSessionId === session.id
+          ? [
+              this.prisma.workItem.update({
+                where: { id: session.workItem.id },
+                data: workItemUpdate,
+              }),
+            ]
+          : []),
+      ]);
+    }
+
+    if (dispatchingSessions.length > 0) {
+      await this.redis.getClient().set(this.CLAIM_AVAILABLE_KEY, "1");
+    }
 
     for (const runnerId of runnerIds) {
       await this.audit.log(
@@ -586,7 +632,10 @@ export class RunnerService {
         runnerId,
         "runner",
         runnerId,
-        { releasedSessionCount: releasedSessions.filter((s) => s.runnerId === runnerId).length },
+        {
+          releasedSessionCount: dispatchingSessions.filter((s) => s.runnerId === runnerId).length,
+          failedSessionCount: runningSessions.filter((s) => s.runnerId === runnerId).length,
+        },
       );
     }
   }
