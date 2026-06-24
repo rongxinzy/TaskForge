@@ -521,11 +521,17 @@ export class RunnerService {
   @Cron("*/10 * * * * *")
   async releaseOfflineRunnerSessions() {
     const cutoff = new Date(Date.now() - this.HEARTBEAT_TIMEOUT_MS);
-    const offlineRunners = await this.prisma.runnerProfile.findMany({
+
+    await this.prisma.runnerProfile.updateMany({
       where: {
         status: { not: "offline" },
         lastHeartbeatAt: { lt: cutoff },
       },
+      data: { status: "offline" },
+    });
+
+    const offlineRunners = await this.prisma.runnerProfile.findMany({
+      where: { status: "offline" },
       select: { id: true },
     });
 
@@ -534,11 +540,6 @@ export class RunnerService {
     }
 
     const runnerIds = offlineRunners.map((r) => r.id);
-
-    await this.prisma.runnerProfile.updateMany({
-      where: { id: { in: runnerIds } },
-      data: { status: "offline" },
-    });
 
     const dispatchingSessions = await this.prisma.agentSession.findMany({
       where: {
