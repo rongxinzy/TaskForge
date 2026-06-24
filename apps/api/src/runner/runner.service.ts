@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { Cron } from "@nestjs/schedule";
 import {
   AppendSessionEventInput,
   RunnerHeartbeatInput,
@@ -51,6 +52,7 @@ export class RunnerService {
   private readonly REG_TOKEN_PREFIX = "runner:register:";
   private readonly REG_TOKEN_TTL_SECONDS = 15 * 60;
   private readonly CLAIM_AVAILABLE_KEY = "runner:claims:available";
+  private readonly HEARTBEAT_TIMEOUT_MS = 30_000;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -514,5 +516,78 @@ export class RunnerService {
       artifactId: artifact.id,
       uploadUrl: `${artifact.storageUrl}?signature=stub&artifactId=${artifact.id}`,
     };
+  }
+
+  @Cron("*/10 * * * * *")
+  async releaseOfflineRunnerSessions() {
+    const cutoff = new Date(Date.now() - this.HEARTBEAT_TIMEOUT_MS);
+    const offlineRunners = await this.prisma.runnerProfile.findMany({
+      where: {
+        status: { not: "offline" },
+        lastHeartbeatAt: { lt: cutoff },
+      },
+      select: { id: true },
+    });
+
+    if (offlineRunners.length === 0) {
+      return;
+    }
+
+    const runnerIds = offlineRunners.map((r) => r.id);
+
+    await this.prisma.runnerProfile.updateMany({
+      where: { id: { in: runnerIds } },
+      data: { status: "offline" },
+    });
+
+    const releasedSessions = await this.prisma.agentSession.findMany({
+      where: {
+        status: "dispatching",
+        runnerId: { in: runnerIds },
+      },
+      select: { id: true, runnerId: true },
+    });
+
+    if (releasedSessions.length === 0) {
+      return;
+    }
+
+    for (const session of releasedSessions) {
+      const maxSeq = await this.prisma.sessionEvent.aggregate({
+        where: { sessionId: session.id },
+        _max: { seq: true },
+      });
+      const seq = nextEventSeq(maxSeq._max.seq);
+
+      await this.prisma.$transaction([
+        this.prisma.agentSession.update({
+          where: { id: session.id },
+          data: { status: "queued", runnerId: null },
+        }),
+        this.prisma.sessionEvent.create({
+          data: {
+            sessionId: session.id,
+            seq,
+            type: "runner.released",
+            payload: {
+              previousRunnerId: session.runnerId,
+              reason: "runner_offline_timeout",
+            },
+          },
+        }),
+      ]);
+    }
+
+    await this.redis.getClient().set(this.CLAIM_AVAILABLE_KEY, "1");
+
+    for (const runnerId of runnerIds) {
+      await this.audit.log(
+        "runner.marked_offline",
+        runnerId,
+        "runner",
+        runnerId,
+        { releasedSessionCount: releasedSessions.filter((s) => s.runnerId === runnerId).length },
+      );
+    }
   }
 }
