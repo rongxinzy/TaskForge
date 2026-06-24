@@ -1,6 +1,9 @@
-import { Controller, Get, Param, Patch, Post } from "@nestjs/common";
+import { Controller, Delete, Get, Param, Patch, Post } from "@nestjs/common";
 import {
+  CreateWorkItemCommentInput,
   CreateWorkItemInput,
+  UpdateWorkItemCommentInput,
+  UpdateWorkItemInput,
   UpdateWorkItemStatusInput,
 } from "@taskforge/contracts";
 import { ZodBody } from "../common/zod.pipe";
@@ -24,6 +27,15 @@ export class WorkItemsController {
     return this.workItems.findOne(id, user.id);
   }
 
+  @Patch(":id")
+  update(
+    @Param("id") id: string,
+    @ZodBody(UpdateWorkItemInput) input: UpdateWorkItemInput,
+    @ReqUser() user: RequestUser,
+  ) {
+    return this.workItems.update(id, input, user.id);
+  }
+
   @Get(":id/sessions")
   findSessions(@Param("id") id: string, @ReqUser() user: RequestUser) {
     return this.workItems.findSessions(id, user.id);
@@ -37,6 +49,41 @@ export class WorkItemsController {
     @ReqUser() user: RequestUser,
   ) {
     return this.workItems.updateStatus(id, input, user.id);
+  }
+
+  @Post(":id/comments")
+  createComment(
+    @Param("id") id: string,
+    @ZodBody(CreateWorkItemCommentInput)
+    input: CreateWorkItemCommentInput,
+    @ReqUser() user: RequestUser,
+  ) {
+    return this.workItems.createComment(id, input, user.id);
+  }
+
+  @Get(":id/comments")
+  findComments(@Param("id") id: string, @ReqUser() user: RequestUser) {
+    return this.workItems.findComments(id, user.id);
+  }
+
+  @Patch(":id/comments/:commentId")
+  updateComment(
+    @Param("id") id: string,
+    @Param("commentId") commentId: string,
+    @ZodBody(UpdateWorkItemCommentInput)
+    input: UpdateWorkItemCommentInput,
+    @ReqUser() user: RequestUser,
+  ) {
+    return this.workItems.updateComment(id, commentId, input, user.id);
+  }
+
+  @Delete(":id/comments/:commentId")
+  deleteComment(
+    @Param("id") id: string,
+    @Param("commentId") commentId: string,
+    @ReqUser() user: RequestUser,
+  ) {
+    return this.workItems.deleteComment(id, commentId, user.id);
   }
 
   @Post(":id/context-bundles")

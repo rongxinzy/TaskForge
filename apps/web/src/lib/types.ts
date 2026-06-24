@@ -65,6 +65,17 @@ export interface PullRequest {
   updatedAt: string;
 }
 
+export interface WorkItemComment {
+  id: string;
+  workItemId: string;
+  authorId?: string | null;
+  author: { id: string; name: string } | null;
+  body: string;
+  kind: "comment" | "context" | "decision";
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface WorkItem {
   id: string;
   projectId: string;
@@ -79,6 +90,7 @@ export interface WorkItem {
   activeSession?: ActiveSession | null;
   contextBundle?: ContextBundle | null;
   pullRequests?: PullRequest[];
+  comments?: WorkItemComment[];
 }
 
 export interface ProjectBoard {

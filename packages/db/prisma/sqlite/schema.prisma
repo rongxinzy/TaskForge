@@ -18,6 +18,7 @@ model User {
   ownedTeams          Team[]          @relation(name: "TeamOwner")
   teamMemberships     TeamMember[]
   projectMemberships  ProjectMember[]
+  workItemComments    WorkItemComment[]
 }
 
 model Team {
@@ -390,8 +391,13 @@ model WorkItemComment {
   workItemId String
   workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
   authorId   String?
+  author     User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
   body       String
   kind       String   @default("comment")
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workItemId])
+  @@index([authorId])
 }

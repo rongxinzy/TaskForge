@@ -1,10 +1,14 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
 import {
+  CreateWorkItemCommentInput,
   CreateWorkItemInput,
+  UpdateWorkItemCommentInput,
+  UpdateWorkItemInput,
   UpdateWorkItemStatusInput,
   type WorkItemStatus,
 } from "@taskforge/contracts";
@@ -79,6 +83,41 @@ export class WorkItemsService {
       createdAt: s.createdAt,
       updatedAt: s.updatedAt,
     }));
+  }
+
+  async update(id: string, input: UpdateWorkItemInput, actorId: string) {
+    const workItem = await this.prisma.workItem.findUnique({ where: { id } });
+    if (!workItem) {
+      throw new NotFoundException("Work item not found");
+    }
+    await this.projects.requireAccess(
+      actorId,
+      workItem.projectId,
+      "contributor",
+    );
+
+    const data: Record<string, unknown> = {};
+    if (input.title !== undefined) data.title = input.title;
+    if (input.description !== undefined) data.description = input.description;
+    if (input.acceptanceCriteria !== undefined) {
+      data.acceptanceCriteria = input.acceptanceCriteria;
+    }
+    if (input.reproductionSteps !== undefined) {
+      data.reproductionSteps = input.reproductionSteps;
+    }
+    if (input.type !== undefined) data.type = input.type;
+    if (input.priority !== undefined) data.priority = input.priority;
+    if (input.repositoryId !== undefined) data.repositoryId = input.repositoryId;
+    if (input.assigneeId !== undefined) data.assigneeId = input.assigneeId;
+
+    const updated = await this.prisma.workItem.update({
+      where: { id },
+      data,
+    });
+    await this.audit.log("workitem.updated", actorId, "workitem", id, {
+      ...data,
+    });
+    return updated;
   }
 
   async updateStatus(
@@ -170,6 +209,128 @@ export class WorkItemsService {
       { workItemId: id, version: nextVersion },
     );
     return bundle;
+  }
+
+  async createComment(
+    workItemId: string,
+    input: CreateWorkItemCommentInput,
+    actorId: string,
+  ) {
+    const workItem = await this.prisma.workItem.findUnique({
+      where: { id: workItemId },
+    });
+    if (!workItem) {
+      throw new NotFoundException("Work item not found");
+    }
+    await this.projects.requireAccess(
+      actorId,
+      workItem.projectId,
+      "contributor",
+    );
+
+    const comment = await this.prisma.workItemComment.create({
+      data: {
+        workItemId,
+        authorId: actorId,
+        body: input.body,
+        kind: input.kind ?? "comment",
+      },
+      include: { author: { select: { id: true, name: true } } },
+    });
+    await this.audit.log(
+      "workitem.comment.created",
+      actorId,
+      "workitemcomment",
+      comment.id,
+      { workItemId },
+    );
+    return comment;
+  }
+
+  async findComments(workItemId: string, actorId: string) {
+    const workItem = await this.prisma.workItem.findUnique({
+      where: { id: workItemId },
+      select: { projectId: true },
+    });
+    if (!workItem) {
+      throw new NotFoundException("Work item not found");
+    }
+    await this.projects.requireAccess(actorId, workItem.projectId, "viewer");
+
+    const comments = await this.prisma.workItemComment.findMany({
+      where: { workItemId },
+      include: { author: { select: { id: true, name: true } } },
+      orderBy: { createdAt: "asc" },
+    });
+    return comments;
+  }
+
+  async updateComment(
+    workItemId: string,
+    commentId: string,
+    input: UpdateWorkItemCommentInput,
+    actorId: string,
+  ) {
+    const comment = await this.requireComment(workItemId, commentId, actorId);
+    if (comment.authorId !== actorId) {
+      throw new ForbiddenException("You can only edit your own comments");
+    }
+    const updated = await this.prisma.workItemComment.update({
+      where: { id: commentId },
+      data: { body: input.body },
+      include: { author: { select: { id: true, name: true } } },
+    });
+    await this.audit.log(
+      "workitem.comment.updated",
+      actorId,
+      "workitemcomment",
+      commentId,
+      { workItemId },
+    );
+    return updated;
+  }
+
+  async deleteComment(
+    workItemId: string,
+    commentId: string,
+    actorId: string,
+  ) {
+    const comment = await this.requireComment(workItemId, commentId, actorId);
+    if (comment.authorId !== actorId) {
+      throw new ForbiddenException("You can only delete your own comments");
+    }
+    await this.prisma.workItemComment.delete({ where: { id: commentId } });
+    await this.audit.log(
+      "workitem.comment.deleted",
+      actorId,
+      "workitemcomment",
+      commentId,
+      { workItemId },
+    );
+    return { id: commentId, deleted: true };
+  }
+
+  private async requireComment(
+    workItemId: string,
+    commentId: string,
+    actorId: string,
+  ) {
+    const comment = await this.prisma.workItemComment.findUnique({
+      where: { id: commentId },
+      include: { workItem: { select: { projectId: true, id: true } } },
+    });
+    if (!comment) {
+      throw new NotFoundException("Comment not found");
+    }
+    if (comment.workItem.id !== workItemId) {
+      throw new NotFoundException("Comment not found");
+    }
+    await this.projects.requireAccess(
+      actorId,
+      comment.workItem.projectId,
+      "contributor",
+    );
+    return comment;
   }
 
   private renderPrompt(

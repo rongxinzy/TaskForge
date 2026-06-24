@@ -111,6 +111,29 @@ export const UpdateWorkItemStatusInput = z.object({
 });
 export type UpdateWorkItemStatusInput = z.infer<typeof UpdateWorkItemStatusInput>;
 
+export const UpdateWorkItemInput = z.object({
+  title: z.string().min(1).max(500).optional(),
+  description: z.string().max(5000).optional(),
+  acceptanceCriteria: z.string().max(5000).optional(),
+  reproductionSteps: z.string().max(5000).optional(),
+  type: WorkItemType.optional(),
+  priority: Priority.optional(),
+  repositoryId: z.string().cuid2().optional().nullable(),
+  assigneeId: z.string().cuid2().optional().nullable(),
+});
+export type UpdateWorkItemInput = z.infer<typeof UpdateWorkItemInput>;
+
+export const CreateWorkItemCommentInput = z.object({
+  body: z.string().min(1).max(5000),
+  kind: z.enum(["comment", "context", "decision"]).optional(),
+});
+export type CreateWorkItemCommentInput = z.infer<typeof CreateWorkItemCommentInput>;
+
+export const UpdateWorkItemCommentInput = z.object({
+  body: z.string().min(1).max(5000),
+});
+export type UpdateWorkItemCommentInput = z.infer<typeof UpdateWorkItemCommentInput>;
+
 export const RunnerAgentInput = z.object({
   name: z.string().min(1).max(100),
   adapter: z.string().max(100).optional(),
